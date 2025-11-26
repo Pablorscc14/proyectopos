@@ -1,10 +1,11 @@
-import './globals.css';
-import Navbar from '@/components/Navbar';
-import Sidebar from '@/components/Sidebar';
+// app/layout.tsx
+import "./globals.css";
+import type { Metadata } from "next";
+import { AuthProvider } from "@/context/AuthContext";
 
-export const metadata = {
-  title: 'Sistema de Ventas e Inventario',
-  description: 'Gestión de repuestos para camiones',
+export const metadata: Metadata = {
+  title: "POS + Inventario",
+  description: "Sistema de punto de venta e inventario",
 };
 
 export default function RootLayout({
@@ -14,12 +15,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es">
-      <body className="flex min-h-screen bg-gray-100 text-gray-800">
-        <Sidebar />
-        <div className="flex flex-col flex-1">
-          <Navbar />
-          <main className="p-6">{children}</main>
-        </div>
+      <body className="min-h-screen bg-background text-foreground antialiased">
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );
