@@ -1,7 +1,7 @@
 // components/inventory/InventoryForm.tsx
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 type FormErrors = {
@@ -9,18 +9,55 @@ type FormErrors = {
   quantity?: string;
   minStock?: string;
   price?: string;
+  categoryId?: string;
   general?: string;
 };
 
-export function InventoryForm() {
+type Category = {
+  id: number;
+  name: string;
+};
+
+type InventoryFormProps = {
+  onSuccess?: () => void; // se usa para cerrar modal desde el padre
+};
+
+export function InventoryForm({ onSuccess }: InventoryFormProps) {
   const [name, setName] = useState("");
   // manejo como string para evitar NaN raros
   const [quantity, setQuantity] = useState<string>("");
   const [minStock, setMinStock] = useState<string>("");
   const [price, setPrice] = useState<string>("");
+  const [categoryId, setCategoryId] = useState<string>("");
+
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+
   const [errors, setErrors] = useState<FormErrors>({});
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Cargar categorías desde Supabase
+  useEffect(() => {
+    const loadCategories = async () => {
+      setCategoriesLoading(true);
+      const { data, error } = await supabase
+        .from("categories")
+        .select("id, name")
+        .order("name", { ascending: true });
+
+      if (error) {
+        console.error("Error cargando categorías:", error);
+        setCategories([]);
+      } else {
+        setCategories(data || []);
+      }
+
+      setCategoriesLoading(false);
+    };
+
+    loadCategories();
+  }, []);
 
   const validate = () => {
     const newErrors: FormErrors = {};
@@ -62,6 +99,10 @@ export function InventoryForm() {
       newErrors.price = "El precio debe ser mayor que 0.";
     }
 
+    if (!categoryId) {
+      newErrors.categoryId = "La categoría es obligatoria.";
+    }
+
     return newErrors;
   };
 
@@ -79,6 +120,7 @@ export function InventoryForm() {
     const q = Number(quantity);
     const m = Number(minStock);
     const p = Number(price);
+    const catId = Number(categoryId);
 
     setLoading(true);
 
@@ -87,6 +129,7 @@ export function InventoryForm() {
       quantity: q,
       min_stock: m,
       price: p,
+      category_id: catId,
     });
 
     if (error) {
@@ -103,7 +146,13 @@ export function InventoryForm() {
     setQuantity("");
     setMinStock("");
     setPrice("");
+    setCategoryId("");
     setLoading(false);
+
+    // si viene onSuccess (por ejemplo desde el modal), se ejecuta
+    if (onSuccess) {
+      onSuccess();
+    }
   };
 
   return (
@@ -127,6 +176,39 @@ export function InventoryForm() {
         {errors.name && (
           <span className="text-[11px] text-red-600 mt-1">
             {errors.name}
+          </span>
+        )}
+      </div>
+
+      {/* Categoría */}
+      <div className="flex flex-col min-w-[180px]">
+        <label className="text-xs font-semibold text-blue-900 mb-1">
+          Categoría
+        </label>
+        <select
+          className={`border rounded-md px-3 py-2 text-sm outline-none text-blue-900 focus:ring-2 focus:ring-blue-500/70 ${
+            errors.categoryId ? "border-red-300" : "border-blue-200"
+          }`}
+          value={categoryId}
+          onChange={(e) => setCategoryId(e.target.value)}
+          disabled={categoriesLoading || categories.length === 0}
+        >
+          <option value="">
+            {categoriesLoading
+              ? "Cargando categorías..."
+              : categories.length === 0
+              ? "No hay categorías (crea una primero)"
+              : "Selecciona una categoría"}
+          </option>
+          {categories.map((cat) => (
+            <option key={cat.id} value={cat.id.toString()}>
+              {cat.name}
+            </option>
+          ))}
+        </select>
+        {errors.categoryId && (
+          <span className="text-[11px] text-red-600 mt-1">
+            {errors.categoryId}
           </span>
         )}
       </div>

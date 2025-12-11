@@ -7,12 +7,31 @@ import { useRouter } from "next/navigation";
 
 type Role = "Administrador" | "Trabajador";
 
+type DashboardMetrics = {
+  salesToday: number;
+  salesTodayCount: number;
+  lowStockCount: number;
+  lastSaleTotal: number | null;
+  lastSaleDate: string | null;
+};
+
 export default function DashboardPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // carga de usuario/rol
+  const [metricsLoading, setMetricsLoading] = useState(true); // carga de métricas
+
   const [sessionUser, setSessionUser] = useState<any>(null);
   const [role, setRole] = useState<Role | null>(null);
 
+  const [metrics, setMetrics] = useState<DashboardMetrics>({
+    salesToday: 0,
+    salesTodayCount: 0,
+    lowStockCount: 0,
+    lastSaleTotal: null,
+    lastSaleDate: null,
+  });
+
+  // 1) Cargar usuario y rol
   useEffect(() => {
     const fetchUser = async () => {
       const {
@@ -44,6 +63,77 @@ export default function DashboardPage() {
     fetchUser();
   }, [router]);
 
+  // 2) Cargar métricas del dashboard
+  const fetchMetrics = async () => {
+    setMetricsLoading(true);
+
+    try {
+      // ---- Ventas hoy (suma total_sale de hoy + cantidad) ----
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+
+      const { data: salesTodayData, error: salesTodayError } = await supabase
+        .from("sales")
+        .select("total_sale, sale_date")
+        .gte("sale_date", startOfDay.toISOString());
+
+      if (salesTodayError) {
+        console.error("Error cargando ventas de hoy:", salesTodayError);
+      }
+
+      const salesToday =
+        salesTodayData?.reduce(
+          (sum, row) => sum + Number(row.total_sale || 0),
+          0
+        ) ?? 0;
+
+      const salesTodayCount = salesTodayData?.length ?? 0;
+
+      // ---- Productos con poco stock (quantity <= min_stock) ----
+      const { data: inventoryData, error: inventoryError } = await supabase
+        .from("inventory")
+        .select("id, quantity, min_stock");
+
+      if (inventoryError) {
+        console.error("Error cargando inventario:", inventoryError);
+      }
+
+      const lowStockCount =
+        inventoryData?.filter(
+          (item) => item.quantity <= item.min_stock
+        ).length ?? 0;
+
+      // ---- Última venta (fecha + total) ----
+      const { data: lastSaleData, error: lastSaleError } = await supabase
+        .from("sales")
+        .select("id, sale_date, total_sale")
+        .order("sale_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (lastSaleError) {
+        console.error("Error cargando última venta:", lastSaleError);
+      }
+
+      setMetrics({
+        salesToday,
+        salesTodayCount,
+        lowStockCount,
+        lastSaleTotal: lastSaleData?.total_sale ?? null,
+        lastSaleDate: lastSaleData?.sale_date ?? null,
+      });
+    } finally {
+      setMetricsLoading(false);
+    }
+  };
+
+  // Dispara la carga de métricas cuando ya sabemos que el usuario está cargado
+  useEffect(() => {
+    if (!loading && sessionUser) {
+      fetchMetrics();
+    }
+  }, [loading, sessionUser]);
+
   if (loading) {
     return (
       <div className="min-h-[calc(100vh-64px)] flex items-center justify-center bg-linear-to-b from-blue-50 via-white to-blue-50">
@@ -51,6 +141,22 @@ export default function DashboardPage() {
       </div>
     );
   }
+
+  const formatCurrency = (value: number | null) =>
+    value == null
+      ? "—"
+      : `$${Number(value).toLocaleString("es-CL", {
+          maximumFractionDigits: 0,
+        })}`;
+
+  const formatDateTime = (isoString: string | null) => {
+    if (!isoString) return "Sin ventas registradas";
+    const date = new Date(isoString);
+    return date.toLocaleString("es-CL", {
+      dateStyle: "short",
+      timeStyle: "short",
+    });
+  };
 
   return (
     <div className="min-h-full w-full bg-linear-to-b from-blue-50 via-white to-blue-50 px-4 py-6">
@@ -78,35 +184,83 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Resumen mini KPIs (dummy por ahora) */}
+        {/* Resumen mini KPIs */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="rounded-xl bg-white border border-blue-100 p-4 shadow-sm">
+          {/* Ventas de hoy (redirige a /ventas) */}
+          <button
+            type="button"
+            onClick={() => router.push("/ventas")}
+            className="rounded-xl bg-white border border-blue-100 p-4 shadow-sm hover:border-blue-300 hover:shadow-md transition-all text-left"
+          >
             <p className="text-xs font-medium text-blue-500 uppercase tracking-wide">
-              Ventas hoy
+              Ventas de hoy
             </p>
-            <p className="mt-2 text-2xl font-bold text-blue-900">$0</p>
-            <p className="mt-1 text-xs text-blue-800/70">
-              Integrar consulta a la tabla <b>sales</b>.
+            <p className="mt-2 text-2xl font-bold text-blue-900">
+              {metricsLoading ? "…" : formatCurrency(metrics.salesToday)}
             </p>
-          </div>
-          <div className="rounded-xl bg-white border border-blue-100 p-4 shadow-sm">
+            <p className="mt-1 text-xs text-blue-800/80">
+              {metricsLoading
+                ? "Calculando ventas del día..."
+                : metrics.salesTodayCount > 0
+                ? `${metrics.salesTodayCount} venta${
+                    metrics.salesTodayCount > 1 ? "s" : ""
+                  } registradas hoy.`
+                : "Aún no hay ventas registradas hoy."}
+            </p>
+            <p className="mt-2 text-[11px] text-blue-500">
+              Ver detalle de ventas del día →
+            </p>
+          </button>
+
+          {/* Productos con poco stock */}
+          <button
+            type="button"
+            onClick={() => router.push("/inventory")}
+            className="rounded-xl bg-white border border-blue-100 p-4 shadow-sm hover:border-blue-300 hover:shadow-md transition-all text-left"
+          >
             <p className="text-xs font-medium text-blue-500 uppercase tracking-wide">
               Productos con poco stock
             </p>
-            <p className="mt-2 text-2xl font-bold text-blue-900">0</p>
-            <p className="mt-1 text-xs text-blue-800/70">
-              Integrar alerta desde <b>inventory</b>.
+            <p className="mt-2 text-2xl font-bold text-blue-900">
+              {metricsLoading ? "…" : metrics.lowStockCount}
             </p>
-          </div>
-          <div className="rounded-xl bg-white border border-blue-100 p-4 shadow-sm">
+            <p className="mt-1 text-xs text-blue-800/80">
+              {metricsLoading
+                ? "Revisando inventario..."
+                : metrics.lowStockCount > 0
+                ? "Revisa estos productos antes de que se agoten."
+                : "Todo el stock está por sobre el mínimo configurado."}
+            </p>
+            <p className="mt-2 text-[11px] text-blue-500">
+              Ver inventario detallado →
+            </p>
+          </button>
+
+          {/* Última venta */}
+          <button
+            type="button"
+            onClick={() => router.push("/ventas")}
+            className="rounded-xl bg-white border border-blue-100 p-4 shadow-sm hover:border-blue-300 hover:shadow-md transition-all text-left"
+          >
             <p className="text-xs font-medium text-blue-500 uppercase tracking-wide">
-              Última venta 
+              Última venta
             </p>
-            <p className="mt-2 text-2xl font-bold text-blue-900">—</p>
-            <p className="mt-1 text-xs text-blue-800/70">
-              Puedes mostrar fecha y total desde <b>sales</b>.
+            <p className="mt-2 text-2xl font-bold text-blue-900">
+              {metricsLoading
+                ? "…"
+                : metrics.lastSaleTotal == null
+                ? "—"
+                : formatCurrency(metrics.lastSaleTotal)}
             </p>
-          </div>
+            <p className="mt-1 text-xs text-blue-800/80">
+              {metricsLoading
+                ? "Buscando la última venta..."
+                : formatDateTime(metrics.lastSaleDate)}
+            </p>
+            <p className="mt-2 text-[11px] text-blue-500">
+              Ver historial de ventas →
+            </p>
+          </button>
         </div>
 
         {/* Tarjetas de navegación según rol */}
