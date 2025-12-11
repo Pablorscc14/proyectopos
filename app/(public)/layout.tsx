@@ -1,4 +1,4 @@
-// app/(public)/layout.ts
+// app/(public)/layout.tsx
 import { ReactNode } from "react";
 import { Navbar } from "@/components/layout/Navbar";
 
