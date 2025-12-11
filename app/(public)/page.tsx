@@ -1,4 +1,4 @@
-// app/(public)/page.tsx
+// app/(public)/page.ts
 export default function HomePage() {
   return (
     <section className="min-h-[calc(100vh-64px)] flex items-center justify-center bg-linear-to-b from-blue-50 via-white to-blue-50 px-4">
