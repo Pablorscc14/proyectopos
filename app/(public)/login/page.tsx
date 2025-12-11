@@ -13,14 +13,24 @@ type LoginErrors = {
   email?: string;
   password?: string;
   general?: string;
+  resetEmail?: string;
+  resetGeneral?: string;
 };
 
 export default function LoginPage() {
   const router = useRouter();
+
   const [form, setForm] = useState<LoginForm>({ email: "", password: "" });
   const [errors, setErrors] = useState<LoginErrors>({});
   const [loading, setLoading] = useState(false);
+
   const [showPassword, setShowPassword] = useState(false);
+
+  // Estado para recuperar contraseña
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
 
   const validate = (values: LoginForm): LoginErrors => {
     const newErrors: LoginErrors = {};
@@ -103,15 +113,44 @@ export default function LoginPage() {
     }
   };
 
+  // -----------------------------
+  // RESTABLECER CONTRASEÑA
+  // -----------------------------
+  const handleResetPassword = async () => {
+    setErrors({});
+    setResetLoading(true);
+
+    if (!resetEmail.trim()) {
+      setErrors({ resetEmail: "Debes ingresar tu correo." });
+      setResetLoading(false);
+      return;
+    }
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+
+      if (error) {
+        setErrors({ resetGeneral: "Error al enviar el correo. Inténtalo nuevamente." });
+        setResetLoading(false);
+        return;
+      }
+
+      setResetSent(true);
+    } catch (err) {
+      setErrors({ resetGeneral: "Ocurrió un error inesperado." });
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-[calc(100vh-64px)] flex items-center justify-center px-4">
       <div className="w-full max-w-md bg-white/90 border border-blue-100 shadow-lg rounded-2xl p-6 sm:p-8">
         <h1 className="text-2xl sm:text-3xl font-bold text-center mb-2 text-blue-900">
           Iniciar sesión
         </h1>
-        <p className="text-center text-xs sm:text-sm text-blue-800/80 mb-6">
-          Accede a tu panel de ventas e inventario.
-        </p>
 
         {errors.general && (
           <div className="mb-4 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs sm:text-sm text-red-700">
@@ -175,6 +214,16 @@ export default function LoginPage() {
             )}
           </div>
 
+          <div className="text-right">
+            <button
+              type="button"
+              onClick={() => setResetOpen(true)}
+              className="text-xs sm:text-sm text-blue-700 hover:text-blue-900"
+            >
+              ¿Olvidaste tu contraseña?
+            </button>
+          </div>
+
           <button
             type="submit"
             disabled={loading}
@@ -184,16 +233,66 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="text-center text-xs sm:text-sm mt-4 text-blue-800/80">
-          ¿No tienes cuenta?{" "}
-          <a
-            href="/register"
-            className="font-semibold text-blue-600 hover:text-blue-800"
-          >
-            Crear una cuenta
-          </a>
-        </p>
+    
       </div>
+
+      {/* ---------------- MODAL ---------------- */}
+      {resetOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+          <div className="bg-white w-full max-w-sm rounded-xl p-6 shadow-lg border border-blue-100">
+            <h2 className="text-lg font-semibold text-blue-900 mb-2 text-center">
+              Restablecer contraseña
+            </h2>
+
+            {!resetSent ? (
+              <>
+                <p className="text-sm text-blue-700/80 mb-4 text-center">
+                  Ingresa tu correo y te enviaremos un enlace para restablecer tu contraseña.
+                </p>
+
+                <input
+                  type="email"
+                  placeholder="tu@correo.com"
+                  className="w-full border border-blue-200 rounded-md px-3 py-2 text-sm mb-2"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                />
+
+                {errors.resetEmail && (
+                  <p className="text-xs text-red-600 mb-2">{errors.resetEmail}</p>
+                )}
+                {errors.resetGeneral && (
+                  <p className="text-xs text-red-600 mb-2">{errors.resetGeneral}</p>
+                )}
+
+                <button
+                  onClick={handleResetPassword}
+                  disabled={resetLoading}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-md py-2 mt-1 disabled:opacity-60"
+                >
+                  {resetLoading ? "Enviando..." : "Enviar enlace"}
+                </button>
+              </>
+            ) : (
+              <p className="text-center text-green-700 font-medium py-4">
+                ✔ Correo enviado. Revisa tu bandeja.
+              </p>
+            )}
+
+            <button
+              onClick={() => {
+                setResetOpen(false);
+                setResetSent(false);
+                setResetEmail("");
+                setErrors({});
+              }}
+              className="mt-4 w-full text-sm text-blue-700 hover:text-blue-900 font-medium"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

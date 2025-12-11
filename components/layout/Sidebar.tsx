@@ -15,6 +15,7 @@ export function Sidebar() {
     { href: "/inventory", label: "Inventario", roles: ["Administrador"] },
     { href: "/ventas", label: "Ventas", roles: ["Administrador"] },
     { href: "/usuarios", label: "Usuarios", roles: ["Administrador"] },
+    { href: "/categorias", label: "Categorias", roles: ["Administrador"] },
 
   ];
 

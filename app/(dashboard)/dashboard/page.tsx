@@ -100,7 +100,7 @@ export default function DashboardPage() {
           </div>
           <div className="rounded-xl bg-white border border-blue-100 p-4 shadow-sm">
             <p className="text-xs font-medium text-blue-500 uppercase tracking-wide">
-              Última venta
+              Última venta 
             </p>
             <p className="mt-2 text-2xl font-bold text-blue-900">—</p>
             <p className="mt-1 text-xs text-blue-800/70">
